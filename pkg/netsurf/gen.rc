@@ -1,0 +1,243 @@
+cflags\
+	-D NDEBUG\
+	-I '$srcdir'/libwapcaplet/include\
+	-I '$srcdir'/libnsutils/include\
+	-I '$srcdir'/libnsfb/include\
+	-I '$srcdir'/libnsbmp/include\
+	-I '$srcdir'/libnsgif/include\
+	-I '$srcdir'/libhubbub/include\
+	-I '$srcdir'/libdom/include\
+	-I '$srcdir'/libutf8proc/include\
+	-I '$srcdir'/libparserutils/include\
+	-I '$srcdir'/libcss/include\
+	-I '$srcdir'/libdom/include\
+	-I '$srcdir'/libcss/include\
+	-I '$outdir'/include
+
+fn subproject {
+	{
+		. ./$1.rc
+	} >$1.ninja
+	subninja $1.ninja
+	gen_inputs=($gen_inputs '$dir'/$1)
+}
+
+# host tools
+{
+	toolchain host
+	cflags -isystem '$builddir'/pkg/libpng/include
+	exe gen_prop_parser libcss/src/parse/properties/css_property_parser_gen.c
+	exe convert_image -d pkg/libpng/headers netsurf/frontends/framebuffer/convert_image.c\
+		'$builddir'/pkg/libpng/libpng.a.d
+} >tools.ninja ; subninja tools.ninja
+
+{
+	cflags -I '$srcdir'/nsgenbind/src
+
+	build '$outdir'/nsgenbind/nsgenbind-lexer.c.o cc '$dir'/nsgenbind/nsgenbind-lexer.c '||' '$outdir'/fetch.stamp
+	build '$outdir'/nsgenbind/nsgenbind-parser.c.o cc '$dir'/nsgenbind/nsgenbind-parser.c '||' '$outdir'/fetch.stamp
+	build '$outdir'/nsgenbind/webidl-lexer.c.o cc '$dir'/nsgenbind/webidl-lexer.c '||' '$outdir'/fetch.stamp
+	build '$outdir'/nsgenbind/webidl-parser.c.o cc '$dir'/nsgenbind/webidl-parser.c '||' '$outdir'/fetch.stamp
+
+	exe bin/nsgenbind\
+		nsgenbind/src/^(\
+			nsgenbind.c utils.c webidl-ast.c nsgenbind-ast.c ir.c\
+			duk-libdom.c duk-libdom-interface.c duk-libdom-dictionary.c\
+			duk-libdom-common.c duk-libdom-generated.c\
+		)\
+		'$outdir'/nsgenbind/^(\
+			nsgenbind-lexer.c.o nsgenbind-parser.c.o\
+			webidl-lexer.c.o webidl-parser.c.o\
+		)
+} >nsgenbind.ninja ; subninja nsgenbind.ninja
+
+{
+	cflags\
+		-I '$dir'/libparserutils\
+		-I '$srcdir'/libparserutils/src
+
+	lib libparserutils.a libparserutils/src/^(\
+		charset/^(\
+			aliases.c codec.c\
+			encodings/^(utf8.c utf16.c)\
+		)\
+		input/^(filter.c inputstream.c)\
+		utils/^(buffer.c errors.c stack.c vector.c)\
+	)
+} >libparserutils.ninja ; subninja libparserutils.ninja
+
+{
+	cflags -I '$srcdir'/libutf8proc/include/libutf8proc
+	lib libutf8proc.a libutf8proc/src/utf8proc.c
+} >libutf8proc.ninja ; subninja libutf8proc.ninja
+
+{
+	lib libnsbmp.a libnsbmp/src/libnsbmp.c
+	lib libnsgif.a libnsgif/src/libnsgif.c
+	lib libnsutils.a libnsutils/src/^(base64.c time.c unistd.c)
+	lib libwapcaplet.a libwapcaplet/src/libwapcaplet.c
+} >misc.ninja ; subninja misc.ninja
+
+subproject libcss
+subproject libdom
+subproject libhubbub
+subproject libnsfb
+
+# netsurf
+cflags\
+	-include '$dir'/config.h\
+	-isystem '$builddir'/pkg/curl/include\
+	-isystem pkg/freetype/src/include\
+	-I '$dir'/netsurf\
+	-I '$srcdir'/netsurf\
+	-I '$srcdir'/netsurf/include\
+	-I '$srcdir'/netsurf/frontends\
+	-I '$srcdir'/netsurf/content/handlers\
+	-I '$outdir'
+
+gen_inputs='$dir'/nsgenbind.txt ; checkstatus
+rule nsgenbind '$outdir/bin/nsgenbind -v -I $srcdir/netsurf/content/handlers/javascript/WebIDL $in $outdir/duktape' ; with\
+	restat 1
+
+nsgenbind_srcs='$outdir'/duktape/`{cat nsgenbind.txt}
+build $"nsgenbind_srcs nsgenbind '$srcdir'/netsurf/content/handlers/javascript/duktape/netsurf.bnd '|' '$outdir'/bin/nsgenbind
+
+rule convert_image '$outdir/convert_image $in $out $var'
+fn convert_image {
+	build '$outdir'/$1.c convert_image '$srcdir'/netsurf/frontends/$2 '|' '$outdir'/convert_image ; with\
+		var $1
+}
+
+convert_image left_arrow framebuffer/res/icons/back.png
+convert_image right_arrow framebuffer/res/icons/forward.png
+convert_image reload framebuffer/res/icons/reload.png
+convert_image stop_image framebuffer/res/icons/stop.png
+convert_image history_image framebuffer/res/icons/history.png
+
+convert_image left_arrow_g framebuffer/res/icons/back_g.png
+convert_image right_arrow_g framebuffer/res/icons/forward_g.png
+convert_image reload_g framebuffer/res/icons/reload_g.png
+convert_image stop_image_g framebuffer/res/icons/stop_g.png
+convert_image history_image_g framebuffer/res/icons/history_g.png
+
+convert_image osk_image framebuffer/res/icons/osk.png
+
+convert_image pointer_image framebuffer/res/pointers/default.png
+convert_image hand_image framebuffer/res/pointers/point.png
+convert_image caret_image framebuffer/res/pointers/caret.png
+convert_image menu_image framebuffer/res/pointers/menu.png
+convert_image progress_image framebuffer/res/pointers/progress.png
+convert_image move_image framebuffer/res/pointers/move.png
+
+for(d in l r u d)
+	convert_image scroll$d framebuffer/res/icons/scroll$d.png
+for(n in 0 1 2 3 4 5 6 7 8)
+	convert_image throbber$n gtk/res/throbber/throbber$n.png
+
+phony deps '$outdir'/duktape/binding.c '$dir'/headers
+
+exe bin/netsurf -d '$dir'/deps\
+	netsurf/^(\
+		desktop/^(\
+			cookie_manager.c knockout.c hotlist.c mouse.c\
+			plot_style.c print.c search.c searchweb.c scrollbar.c\
+			sslcert_viewer.c textarea.c tree.c version.c\
+			system_colour.c global_history.c treeview.c\
+			\
+			browser.c browser_history.c download.c frames.c netsurf.c\
+			save_complete.c save_text.c selection.c textinput.c gui_factory.c\
+			save_pdf.c font_haru.c\
+		)\
+		frontends/framebuffer/^(\
+			gui.c framebuffer.c schedule.c bitmap.c fetch.c\
+			findfile.c localhistory.c clipboard.c\
+			font_freetype.c\
+			fbtk/^(\
+				fbtk.c event.c fill.c bitmap.c user.c window.c\
+				text.c scroll.c osk.c\
+			)\
+		)\
+		content/^(\
+			content.c content_factory.c dirlist.c fetch.c hlcache.c\
+			llcache.c mimesniff.c urldb.c no_backing_store.c\
+			fetchers/^(curl.c data.c file.c about.c resource.c)\
+			handlers/^(\
+				javascript/^(fetcher.c content.c duktape/^(dukky.c duktape.c))\
+				css/^(css.c dump.c internal.c hints.c select.c utils.c)\
+				image/^(image.c image_cache.c bmp.c ico.c gif.c)\
+			)\
+		)\
+		utils/^(\
+			base64.c\
+			bloom.c\
+			corestrings.c\
+			file.c\
+			filename.c\
+			filepath.c\
+			hashtable.c\
+			idna.c\
+			libdom.c\
+			log.c\
+			messages.c\
+			nsoption.c\
+			nsurl.c\
+			punycode.c\
+			talloc.c\
+			time.c\
+			url.c\
+			useragent.c\
+			utf8.c\
+			utils.c\
+			http/^(\
+				challenge.c generics.c primitives.c parameter.c\
+				content-disposition.c content-type.c www-authenticate.c\
+			)\
+		)\
+		render/^(\
+			box.c box_construct.c box_normalise.c box_textarea.c\
+			font.c form.c imagemap.c layout.c search.c table.c textplain.c\
+			html.c html_css.c html_css_fetcher.c html_script.c\
+			html_interaction.c html_redraw.c html_forms.c html_object.c\
+		)\
+	)\
+	'$outdir'/^(\
+		duktape/`{grep '\.c$' nsgenbind.txt}\
+		left_arrow.c right_arrow.c reload.c stop_image.c history_image.c\
+		left_arrow_g.c right_arrow_g.c reload_g.c stop_image_g.c history_image_g.c\
+		scroll^(l r u d)^.c\
+		osk_image.c\
+		(pointer hand caret menu progress move)^_image.c\
+		throbber^(0 1 2 3 4 5 6 7 8)^.c\
+		\
+		libcss.a.d\
+		libdom.a.d\
+		libnsbmp.a\
+		libnsfb.a.d libnsfb/src/surface/wld.c.o\
+		libnsgif.a\
+		libnsutils.a\
+		libutf8proc.a\
+	)\
+	'$builddir'/pkg/^(\
+		curl/libcurl.a.d\
+		freetype/libfreetype.a.d\
+		zlib/libz.a\
+	)
+file bin/netsurf '$outdir'/bin/netsurf 755
+
+build '$outdir'/netsurf.1 sed '$srcdir'/netsurf/Docs/netsurf-fb.1 ; with\
+	expr 's,netsurf-fb,netsurf,g'
+man -d '$outdir' 1 netsurf.1
+
+file share/netsurf/Messages '$dir'/netsurf/Messages 644
+file share/netsurf/adblock.css '$srcdir'/netsurf/!NetSurf/Resources/AdBlock,f79 644
+file share/netsurf/credits.html '$srcdir'/netsurf/!NetSurf/Resources/en/credits.html,faf 644
+file share/netsurf/default.css '$srcdir'/netsurf/!NetSurf/Resources/CSS,f79 644
+file share/netsurf/favicon.png '$srcdir'/netsurf/resources/favicon.png 644
+file share/netsurf/internal.css '$srcdir'/netsurf/!NetSurf/Resources/internal.css,f79 644
+file share/netsurf/licence.html '$srcdir'/netsurf/!NetSurf/Resources/en/licence.html,faf 644
+sym share/netsurf/maps.html welcome.html
+file share/netsurf/netsurf.png '$srcdir'/netsurf/!NetSurf/Resources/netsurf.png,b60 644
+file share/netsurf/quirks.css '$srcdir'/netsurf/!NetSurf/Resources/Quirks,f79 644
+file share/netsurf/welcome.html '$srcdir'/netsurf/!NetSurf/Resources/en/welcome.html,faf 644
+
+fetch curl

@@ -1,0 +1,12 @@
+cflags\
+	-isystem '$builddir'/pkg/wayland/include\
+	-I '$srcdir'/libnsfb/src
+
+lib libnsfb.a -d pkg/wayland/headers libnsfb/src/^(\
+	libnsfb.c dump.c cursor.c palette.c\
+	plot/^(api.c util.c generic.c 32bpp-xrgb8888.c 32bpp-xbgr8888.c 16bpp.c 8bpp.c)\
+	surface/^(surface.c ram.c wld.c)\
+) '$builddir'/pkg/^(\
+	wayland/libwayland-client.a.d\
+	wayland-protocols/xdg-shell-unstable-v5-protocol.c.o\
+)

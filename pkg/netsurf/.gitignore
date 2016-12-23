@@ -1,0 +1,12 @@
+/netsurf-all-3.6.tar.gz
+/src
+
+/libcss.ninja
+/libdom.ninja
+/libhubbub.ninja
+/libnsfb.ninja
+/libparserutils.ninja
+/libutf8proc.ninja
+/misc.ninja
+/nsgenbind.ninja
+/tools.ninja
